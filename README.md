@@ -5,6 +5,13 @@ Players take turns saying a word **related to the previous word**. The catch: th
 same word). Fail, repeat, or run out of time and you lose a life; the last player standing wins.
 Every accepted word shortens the clock by 4%, so even perfect players eventually crack.
 
+* **Banned letters are the host's choice**: classic R S T, or any three letters (presets: Easy
+  X Y Z, Vowels A E I, Brutal C P S, Random). The lobby shows how many common words a set
+  blocks, from ~0.4% (X Y Z) to ~30% (C P S); R S T blocks ~23%.
+* **Scoring**: 10 points per accepted word + up to 5 for answering fast. The host can end the
+  game at any time; the leader on points wins (ties: lives left, then fewer misses). If the
+  game is played out, the last player standing wins.
+
 * Online rooms with a 5-letter code (2–7 players), invite links, reconnect on refresh
 * AI players at five levels: **Rookie, Casual, Sharp, Pro, Grandmaster**
   (Grandmaster deliberately plays words whose best answers start with R/S/T)

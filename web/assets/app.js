@@ -8,16 +8,15 @@ const store = {
 };
 
 const SKILLS = [
-  { id: "rookie", label: "Rookie", pips: 1, desc: "Thinks slowly, reaches for loose links, and now and then blurts out an R, S or T word." },
+  { id: "rookie", label: "Rookie", pips: 1, desc: "Thinks slowly, reaches for loose links, and now and then blurts out a banned-letter word." },
   { id: "casual", label: "Casual", pips: 2, desc: "A friendly table guest. Solid links, the occasional slip." },
   { id: "sharp", label: "Sharp", pips: 3, desc: "Quick and reliable. Rarely makes a mistake." },
   { id: "pro", label: "Pro", pips: 4, desc: "Fast, and nearly always plays the strongest association." },
-  { id: "grandmaster", label: "Grandmaster", pips: 5, desc: "Never slips. Picks words whose best answers start with R, S or T — leaving you stuck." },
+  { id: "grandmaster", label: "Grandmaster", pips: 5, desc: "Never slips. Picks words whose best answers start with a banned letter — leaving you stuck." },
 ];
 const AVATAR_COLORS = ["#C2512F", "#2F6F62", "#B5832A", "#3B5B8C", "#7A4E8A", "#5E7D33", "#A23E5A", "#8A6A3B"];
 const REASONS = {
-  "starts with R": "Starts with R — banned letter.", "starts with S": "Starts with S — banned letter.",
-  "starts with T": "Starts with T — banned letter.", "already used": "Already played this game.",
+  "already used": "Already played this game.",
   "not in dictionary": "Not a word the judge knows.", "not related enough": "The judge didn't buy that link.",
   "time's up": "Ran out of time.", "letters only": "Letters only, please.", "too short": "Too short.",
 };
@@ -162,11 +161,12 @@ function renderLobby() {
 
   $("#botPanel").hidden = !host;
   $("#addBotBtn").disabled = st.players.length >= st.maxPlayers;
-  for (const seg of $$(".seg")) {
+  for (const seg of $$(".seg[data-key]")) {
     const v = String(st.settings[seg.dataset.key]);
     seg.classList.toggle("locked", !host);
     for (const b of $$("button", seg)) { b.classList.toggle("on", b.dataset.v === v); b.disabled = !host && b.dataset.v !== v; }
   }
+  renderLetters(host);
   $("#hostHint").textContent = host ? "You're the host — you set the rules." : `${esc(player(st.hostId)?.name || "The host")} sets the rules.`;
   const start = $("#startBtn");
   start.hidden = !host;
@@ -187,11 +187,69 @@ function pickSkill(id) {
 $$(".skill").forEach(b => b.onclick = () => pickSkill(b.dataset.skill));
 pickSkill(S.skill);
 $("#addBotBtn").onclick = () => send("add_bot", { difficulty: S.skill });
-$$(".seg").forEach(seg => seg.addEventListener("click", e => {
+$$(".seg[data-key]").forEach(seg => seg.addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b || seg.classList.contains("locked")) return;
   const v = seg.dataset.key === "strictness" ? b.dataset.v : Number(b.dataset.v);
   send("settings", { settings: { [seg.dataset.key]: v } });
 }));
+// banned letters
+const LETTER_PRESETS = ["rst", "xyz", "aei", "cps"];
+const letterInputs = $$("#letterPick input");
+function renderLetters(host) {
+  const st = S.state, set = st.settings.banned;
+  // While the host is typing letters, don't overwrite the boxes with the server's sorted copy.
+  const editing = letterInputs.includes(document.activeElement);
+  letterInputs.forEach((inp, i) => {
+    if (!editing) inp.value = set[i].toUpperCase();
+    inp.disabled = !host;
+  });
+  $$("#letterPresets button").forEach(b => {
+    b.classList.toggle("on", b.dataset.set === set);
+    b.disabled = !host && b.dataset.set !== set;
+    b.hidden = !host && b.dataset.set === "random";
+  });
+  $("#letterPresets").classList.toggle("locked", !host);
+  const share = st.bannedShare ?? 0, pct = Math.round(share * 100);
+  const level = share < 0.08 ? "easy" : share < 0.2 ? "medium" : share < 0.27 ? "hard" : "brutal";
+  $("#blockFill").style.width = `${Math.min(100, share / 0.35 * 100)}%`;
+  $("#blockFill").classList.toggle("hard", share >= 0.2);
+  $("#blockLabel").textContent = `blocks ${pct}% of words · ${level}`;
+}
+function sendLetters(set) { send("settings", { settings: { banned: set } }); }
+$("#letterPresets").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || $("#letterPresets").classList.contains("locked")) return;
+  let set = b.dataset.set;
+  if (set === "random") {
+    const pool = "abcdefghijklmnopqrstuvwxyz".split("").filter(c => !"xqz".includes(c));
+    do { set = [...pool].sort(() => Math.random() - .5).slice(0, 3).sort().join(""); } while (LETTER_PRESETS.includes(set));
+  }
+  sendLetters(set);
+});
+function onLetterChange(i) {
+  const set = letterInputs.map(x => x.value.toLowerCase()).join("");
+  if (letterInputs[i].value && i < 2) letterInputs[i + 1].focus();
+  if (set.length === 3) {
+    if (new Set(set).size < 3) { toast("Pick three different letters."); return; }
+    sendLetters(set);
+  }
+}
+letterInputs.forEach((inp, i) => {
+  // A letter key always replaces the box's letter (a full maxlength=1 box would ignore it).
+  inp.addEventListener("keydown", e => {
+    if (/^[a-z]$/i.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault(); inp.value = e.key.toUpperCase(); onLetterChange(i);
+    }
+  });
+  // Mobile keyboards and paste don't always send usable key events.
+  inp.addEventListener("input", () => {
+    inp.value = inp.value.replace(/[^a-z]/gi, "").slice(-1).toUpperCase();
+    onLetterChange(i);
+  });
+  inp.addEventListener("focus", () => inp.select());
+  inp.addEventListener("blur", () => setTimeout(() => {
+    if (S.state?.phase === "lobby" && !letterInputs.includes(document.activeElement)) renderLetters(S.state.hostId === S.me);
+  }, 0));
+});
 $("#startBtn").onclick = () => send("start");
 $("#leaveBtn").onclick = () => { store.del(`rst.tok.${S.code}`); goHome(); };
 $("#copyLink").onclick = async () => {
@@ -206,6 +264,9 @@ function renderGame(prev) {
   const word = st.chain.at(-1)?.word || "—";
   const cw = $("#currentWord");
   if (S.lastWordShown !== word) { cw.textContent = word; cw.classList.remove("enter"); void cw.offsetWidth; cw.classList.add("enter"); S.lastWordShown = word; S.typing = {}; }
+  $("#bannedStrip").innerHTML = st.settings.banned.toUpperCase().split("").map(c => `<b>${c}</b>`).join("");
+  $("#bannedStrip").title = `Banned first letters: ${st.settings.banned.toUpperCase().split("").join(", ")}`;
+  $("#endBtn").hidden = st.hostId !== S.me;
   $("#turnLabel").textContent = mine ? "Your turn — link a word to" : `${cur?.name || "…"} is thinking${cur?.isBot ? " (AI)" : ""}`;
 
   $("#chain").innerHTML = st.chain.slice(0, -1).map((m, i) =>
@@ -256,7 +317,8 @@ function renderTyping() {
 function onMove(m) {
   if (!m.ok && m.playerId === S.me) {
     $("#moveWrap").classList.remove("shake"); void $("#moveWrap").offsetWidth; $("#moveWrap").classList.add("shake");
-    toast(REASONS[m.reason] || m.reason || "Rejected", 2800);
+    const banned = /^starts with ([A-Z])$/.exec(m.reason || "");
+    toast(banned ? `Starts with ${banned[1]} — banned letter.` : REASONS[m.reason] || m.reason || "Rejected", 2800);
   } else if (!m.ok) {
     const p = player(m.playerId); toast(`${p?.name || "Someone"} lost a life — ${m.reason}`, 2000);
   }
@@ -264,7 +326,7 @@ function onMove(m) {
 
 function updateWarn() {
   const v = moveInput.value.trim().toLowerCase();
-  const bad = /^[rst]/.test(v);
+  const bad = !!v && (S.state?.settings.banned || "rst").includes(v[0]);
   $("#moveWrap").classList.toggle("warn", bad);
   $("#moveWarn").textContent = bad ? `Starts with ${v[0].toUpperCase()}` : "";
 }
@@ -299,14 +361,18 @@ function startFuse() {
 // over
 function renderOver(prev) {
   const st = S.state, w = player(st.winnerId);
-  $("#winnerLine").innerHTML = w ? (w.id === S.me ? "You <em>win</em>." : `${esc(w.name)} <em>wins</em>.`) : "No one survived.";
+  const how = st.endedBy === "host" ? " on points" : "";
+  $("#winnerLine").innerHTML = w ? (w.id === S.me ? `You <em>win</em>${how}.` : `${esc(w.name)} <em>wins</em>${how}.`) : "No one survived.";
   $("#finalChain").innerHTML = st.chain.map((m, i) => `<span><b>${esc(m.word)}</b>${i < st.chain.length - 1 ? " → " : ""}</span>`).join(" ");
-  const ranked = [...st.players].sort((a, b) => (b.id === st.winnerId) - (a.id === st.winnerId) || b.score - a.score || b.lives - a.lives);
-  $("#standings").innerHTML = ranked.map((p, i) => `<li><span class="rank">${i + 1}</span>${avatar(p)}<span class="name">${esc(p.name)}${p.isBot ? ` <span class="badge">${skillLabel(p.difficulty)}</span>` : ""}</span><span class="score">${p.score}</span></li>`).join("");
+  const ranked = (st.standings || []).map(player).filter(Boolean);
+  $("#standings").innerHTML = ranked.map((p, i) => `<li><span class="rank">${i + 1}</span>${avatar(p)}<span class="name">${esc(p.name)}${p.isBot ? ` <span class="badge">${skillLabel(p.difficulty)}</span>` : ""}<span class="sub">${p.lives > 0 ? `${p.lives} ${p.lives === 1 ? "life" : "lives"} left` : "out"} · ${p.misses} ${p.misses === 1 ? "miss" : "misses"}</span></span><span class="score">${p.score}</span></li>`).join("");
   $("#againBtn").hidden = st.hostId !== S.me;
   if (prev?.phase === "playing" && w?.id === S.me) confetti();
 }
 $("#againBtn").onclick = () => send("lobby");
+$("#endBtn").onclick = () => {
+  if (confirm("End the game for everyone? The leader on points wins.")) send("end");
+};
 $("#homeBtn").onclick = () => { store.del(`rst.tok.${S.code}`); goHome(); };
 
 function confetti() {

@@ -3,10 +3,13 @@
 Rules
 -----
 * Players take turns saying a word related to the previous word.
-* The word may not start with R, S or T, must be a real word, and may not
-  have been used already in this round (inflections count as the same word).
+* The word may not start with one of the room's three banned letters (R, S, T
+  unless the host picks others), must be a real word, and may not have been
+  used already in this round (inflections count as the same word).
 * A failed move or a timeout costs a life. The next player then answers the
   same word. Lose every life and you are out; the last player standing wins.
+* Each accepted word scores 10 points plus up to 5 for answering fast. If the
+  host ends the game early, the leader on points wins (ties: lives, then misses).
 * The clock tightens: every accepted word cuts the turn time by 4%, down to
   MIN_TURN seconds, so even perfect players eventually crack.
 """
@@ -23,7 +26,8 @@ from typing import Callable, Awaitable
 MAX_PLAYERS = 7
 MIN_TURN = 4.0
 SPEEDUP = 0.96
-FORBIDDEN = ("r", "s", "t")
+DEFAULT_BANNED = "rst"
+BASE_POINTS, SPEED_POINTS = 10, 5
 # Room codes skip R/S/T (house style) and look-alike characters.
 CODE_ALPHABET = "".join(c for c in string.ascii_uppercase if c not in "RSTOIL") + "23456789"
 
@@ -40,6 +44,7 @@ class Player:
     difficulty: str | None = None
     lives: int = 3
     score: int = 0
+    misses: int = 0
     connected: bool = True
     away_since: float | None = None
     token: str = field(default_factory=lambda: secrets.token_urlsafe(16))
@@ -51,7 +56,7 @@ class Player:
     def public(self) -> dict:
         return {"id": self.id, "name": self.name, "isBot": self.is_bot,
                 "difficulty": self.difficulty, "lives": self.lives,
-                "score": self.score, "connected": self.connected}
+                "score": self.score, "misses": self.misses, "connected": self.connected}
 
 
 @dataclass
@@ -59,10 +64,11 @@ class Settings:
     turn_seconds: int = 15
     lives: int = 3
     strictness: str = "normal"  # lenient | normal | strict
+    banned: str = DEFAULT_BANNED  # three distinct lowercase letters, sorted
 
     def public(self) -> dict:
         return {"turnSeconds": self.turn_seconds, "lives": self.lives,
-                "strictness": self.strictness}
+                "strictness": self.strictness, "banned": self.banned}
 
 
 @dataclass
@@ -97,6 +103,7 @@ class Room:
         self.turn_length: float = 0.0
         self.turn_no = 0
         self.winner_id: str | None = None
+        self.ended_by: str | None = None  # "last" (one survivor) | "host" (ended early)
         self.paused = False  # every human dropped mid-game; resumes when one returns
         self._timer: asyncio.Task | None = None
         self._bot_task: asyncio.Task | None = None
@@ -184,6 +191,11 @@ class Room:
             s.lives = int(min(5, max(1, int(data["lives"]))))
         if data.get("strictness") in ("lenient", "normal", "strict"):
             s.strictness = data["strictness"]
+        if "banned" in data:
+            letters = str(data["banned"]).lower()
+            if len(letters) != 3 or len(set(letters)) != 3 or not all("a" <= c <= "z" for c in letters):
+                raise GameError("Pick three different letters.")
+            s.banned = "".join(sorted(letters))
         for p in self.players:
             p.lives = s.lives
 
@@ -207,9 +219,10 @@ class Room:
         self.paused = False
         self.chain, self.history, self.used = [], [], set()
         self.winner_id = None
+        self.ended_by = None
         for p in self.players:
-            p.lives, p.score = self.settings.lives, 0
-        seed = self.model.random_seed_word()
+            p.lives, p.score, p.misses = self.settings.lives, 0, 0
+        seed = self.model.random_seed_word(self.settings.banned)
         self.chain.append(Move(player_id="seed", word=seed, ok=True))
         self.used.add(self.model.normalize(seed))
         self.turn_idx = random.randrange(len(self.players))
@@ -229,15 +242,17 @@ class Room:
         if ok:
             self.chain.append(move)
             self.used.add(self.model.normalize(word))
-            cur.score += 10 + int(round(10 * (1 - min(1.0, score or 0))))  # bonus for bold links
+            left = max(0.0, (self.turn_deadline or 0) - time.time())
+            cur.score += BASE_POINTS + round(SPEED_POINTS * min(1.0, left / max(0.1, self.turn_length)))
         else:
             cur.lives -= 1
+            cur.misses += 1
         await self._advance(last_move=move)
 
     def validate(self, word: str) -> tuple[bool, str | None, float | None]:
         if not word or not word.isalpha():
             return False, "letters only", None
-        if word[0] in FORBIDDEN:
+        if word[0] in self.settings.banned:
             return False, f"starts with {word[0].upper()}", None
         if len(word) < 2:
             return False, "too short", None
@@ -261,6 +276,7 @@ class Room:
                 return
             cur = self.current
             cur.lives -= 1
+            cur.misses += 1
             move = Move(player_id=cur.id, word="⏱", ok=False, reason="time's up")
             self.history.append(move)
             await self._advance(last_move=move)
@@ -270,6 +286,7 @@ class Room:
         if len(alive) <= 1:
             self.phase = "over"
             self.winner_id = alive[0].id if alive else None
+            self.ended_by = "last"
             self._cancel_tasks()
             await self.push({"type": "move", "move": last_move.public()})
             await self.push_state()
@@ -307,6 +324,23 @@ class Room:
             if t and not t.done() and t is not current:
                 t.cancel()
 
+    def standings(self) -> list[Player]:
+        """Final order. A survivor of a played-out game comes first; otherwise points,
+        then lives left, then fewer misses."""
+        def key(p):
+            return (p.id != self.winner_id if self.ended_by == "last" else 0,
+                    -p.score, -p.lives, p.misses)
+        return sorted(self.players, key=key)
+
+    async def end_game(self):
+        """Host stops the game early: the leader on points wins."""
+        if self.phase != "playing":
+            raise GameError("No game in progress.")
+        self._cancel_tasks()
+        self.phase, self.paused, self.ended_by = "over", False, "host"
+        self.winner_id = self.standings()[0].id
+        await self.push_state()
+
     async def back_to_lobby(self):
         if self.phase != "over":
             raise GameError("Finish the game first.")
@@ -314,8 +348,9 @@ class Room:
         self.phase = "lobby"
         self.players = [p for p in self.players if p.connected or p.is_bot]
         for p in self.players:
-            p.lives, p.score = self.settings.lives, 0
+            p.lives, p.score, p.misses = self.settings.lives, 0, 0
         self.chain, self.history = [], []
+        self.winner_id = self.ended_by = None
         await self.push_state()
 
     # ------------------------------------------------------------- output
@@ -333,6 +368,9 @@ class Room:
             "turnLength": self.turn_length,
             "serverTime": time.time(),
             "winnerId": self.winner_id,
+            "endedBy": self.ended_by,
+            "standings": [p.id for p in self.standings()] if self.phase == "over" else None,
+            "bannedShare": round(self.model.banned_share(self.settings.banned), 3),
             "paused": self.paused,
             "maxPlayers": MAX_PLAYERS,
         }

@@ -6,7 +6,7 @@ from server.bots import PROFILES, choose_word
 from server.game import MAX_PLAYERS, GameError, Room
 
 LINKS = {("ocean", "wave"), ("wave", "hello"), ("wave", "surf"), ("wave", "water"),
-         ("ocean", "water"), ("hello", "goodbye"), ("ocean", "blue")}
+         ("ocean", "water"), ("hello", "goodbye"), ("ocean", "blue"), ("ocean", "surf")}
 
 
 class FakeModel:
@@ -16,19 +16,20 @@ class FakeModel:
     def in_vocab(self, w): return w in self.index
     def normalize(self, w): return {"waters": "water"}.get(w, w)
     def threshold(self, s): return 0.5
-    def random_seed_word(self): return "ocean"
+    def random_seed_word(self, banned="rst"): return "ocean"
+    def banned_share(self, banned): return 0.1
 
     def relatedness(self, a, b):
         return 0.9 if (a, b) in LINKS or (b, a) in LINKS else 0.1
 
-    def candidates(self, prev, exclude=frozenset(), k=50, allow_forbidden=False):
+    def candidates(self, prev, exclude=frozenset(), k=50, allow_forbidden=False, banned="rst"):
         out = [(w, self.relatedness(prev, w)) for w in self.words
                if w != prev and self.normalize(w) not in exclude
-               and (allow_forbidden or w[0] not in "rst")]
+               and (allow_forbidden or w[0] not in banned)]
         return sorted(out, key=lambda x: -x[1])[:k]
 
-    def forbidden_pressure(self, w, used): return 0.0
-    def forbidden_pressure_many(self, words, used): return [0.0] * len(words)
+    def forbidden_pressure(self, w, used, banned="rst"): return 0.0
+    def forbidden_pressure_many(self, words, used, banned="rst"): return [0.0] * len(words)
 
 
 async def _noop(room, msg):
@@ -187,5 +188,68 @@ def test_current_player_disconnect_gets_autoplay_and_reconnect_cancels_it():
         await room.reconnect(cur.id)
         await asyncio.sleep(0)
         assert room._bot_task.cancelled() or room._bot_task.done()
+        room._cancel_tasks()
+    run(go())
+
+
+def test_custom_banned_letters():
+    async def go():
+        room, (a, b) = make_room()
+        room.update_settings({"banned": "WHB"})
+        assert room.settings.banned == "bhw"
+        await room.start()
+        room._cancel_tasks()
+        assert room.validate("wave")[1] == "starts with W"
+        assert room.validate("surf")[0] is True            # S is allowed now
+        for bad in ["ab", "aab", "a1c", "abcd"]:
+            with pytest.raises(GameError):
+                room.settings.banned = "rst"; room.phase = "lobby"; room.update_settings({"banned": bad})
+    run(go())
+
+
+def test_bots_respect_custom_letters():
+    m = FakeModel()
+    for _ in range(30):
+        w = choose_word(m, "ocean", {"ocean"}, "grandmaster", 0.5, banned="wbh")
+        assert w is None or w[0] not in "wbh"
+
+
+def test_host_end_game_ranks_by_points_then_lives_then_misses():
+    async def go():
+        room, (a, b, c) = make_room(3)
+        await room.start()
+        room._cancel_tasks()
+        a.score, b.score, c.score = 30, 40, 40
+        b.lives, c.lives = 2, 2
+        b.misses, c.misses = 1, 0
+        await room.end_game()
+        assert room.phase == "over" and room.ended_by == "host"
+        assert [p.id for p in room.standings()] == [c.id, b.id, a.id]
+        assert room.winner_id == c.id
+        with pytest.raises(GameError):
+            await room.end_game()
+    run(go())
+
+
+def test_last_standing_survivor_ranks_first_even_with_fewer_points():
+    async def go():
+        room, (a, b) = make_room()
+        room.update_settings({"lives": 1})
+        await room.start()
+        loser = room.current
+        winner = b if loser is a else a
+        loser.score = 999
+        await room.submit(loser.id, "piano")
+        assert room.standings()[0] is winner
+    run(go())
+
+
+def test_scoring_is_base_plus_speed_bonus():
+    async def go():
+        room, (a, b) = make_room()
+        await room.start()
+        cur = room.current
+        await room.submit(cur.id, "wave")                  # answered instantly
+        assert cur.score == 15
         room._cancel_tasks()
     run(go())

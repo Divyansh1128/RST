@@ -199,6 +199,8 @@ async def handle(room: Room, player, msg: dict):
             await room.push_state()
         elif kind == "start":
             await room.start()
+        elif kind == "end":
+            await room.end_game()
         elif kind == "lobby":
             await room.back_to_lobby()
         else:

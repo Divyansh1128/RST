@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-FORBIDDEN = ("r", "s", "t")
+DEFAULT_BANNED = "rst"  # rooms can pick any three letters; this is the classic set
 KNOWN_PAIR_PROB = 0.95  # attested associations pass even the strict threshold
 
 
@@ -45,12 +45,12 @@ class AssociationModel:
         self.index = {w: i for i, w in enumerate(self.words)}
         self.lemma: dict[str, str] = vocab.get("lemma", {})
         self.playable = np.asarray(vocab.get("playable", [1] * len(self.words)), dtype=bool)
-        self.seeds = [w for w in vocab.get("seeds", []) if w in self.index and w[0] not in FORBIDDEN
+        self.seeds = [w for w in vocab.get("seeds", []) if w in self.index
                       and self.lemma.get(w, w) == w]  # "hat", not "hats"
         self.E = np.load(d / "emb.npy").astype(np.float32)
         load = lambda name: np.load(d / name).astype(np.float32) if (d / name).exists() else self.E
         self.Z, self.Q, self.K = load("z.npy"), load("q.npy"), load("k.npy")
-        self.forbidden_mask = np.array([w[0] in FORBIDDEN for w in self.words])
+        self.first = np.array([ord(w[0]) - 97 for w in self.words], dtype=np.int8)  # a=0 .. z=25
         self.judge = None
         if self.meta.get("judge") == "mlp" and (d / "judge.npz").exists():
             self.judge = dict(np.load(d / "judge.npz"))
@@ -58,7 +58,10 @@ class AssociationModel:
         self.play_idx = np.flatnonzero(self.playable)
         self.K_play = np.ascontiguousarray(self.K[self.play_idx])
         del self.K  # only the playable rows are ever searched; frees ~50 MB
-        self.play_forbidden = self.forbidden_mask[self.play_idx]
+        self.play_first = self.first[self.play_idx]
+        # Share of common playable words each letter starts (for the lobby difficulty meter).
+        common = self.play_idx[self.play_idx < 10_000]
+        self.letter_share = np.bincount(self.first[common], minlength=26)[:26] / max(1, len(common))
         # Known pairs as sorted int64 keys a*N+b (both directions) for vectorised lookup.
         n = len(self.words)
         self.known = np.zeros(0, dtype=np.int64)
@@ -80,11 +83,20 @@ class AssociationModel:
     def threshold(self, strictness: str) -> float:
         return float(self._thr.get(strictness, self._thr["normal"]))
 
-    def random_seed_word(self) -> str:
-        if self.seeds:
-            return random.choice(self.seeds)
-        pool = np.flatnonzero(self.playable[:3000] & ~self.forbidden_mask[:3000])
-        return self.words[int(random.choice(pool))]
+    def _banned_codes(self, banned: str) -> np.ndarray:
+        return np.array([ord(c) - 97 for c in banned], dtype=np.int8)
+
+    def banned_share(self, banned: str) -> float:
+        """Share of common playable words that start with one of `banned`."""
+        return float(self.letter_share[self._banned_codes(banned)].sum())
+
+    def random_seed_word(self, banned: str = DEFAULT_BANNED) -> str:
+        pool = [w for w in self.seeds if w[0] not in banned]
+        if pool:
+            return random.choice(pool)
+        idx = self.play_idx[:3000]
+        idx = idx[~np.isin(self.first[idx], self._banned_codes(banned))]
+        return self.words[int(random.choice(idx))]
 
     # ------------------------------------------------------------- scoring
     def _score(self, i: int, js: np.ndarray) -> np.ndarray:
@@ -127,7 +139,8 @@ class AssociationModel:
         return float(self._score(self.index[a], np.array([self.index[b]]))[0])
 
     def candidates(self, prev: str, exclude: set[str] = frozenset(), k: int = 50,
-                   allow_forbidden: bool = False, retrieve: int = 200) -> list[tuple[str, float]]:
+                   allow_forbidden: bool = False, retrieve: int = 200,
+                   banned: str = DEFAULT_BANNED) -> list[tuple[str, float]]:
         """Top-k playable next words for `prev`, in the order a person would think of
         them (player head), each with its judge probability."""
         if prev not in self.index:
@@ -135,7 +148,7 @@ class AssociationModel:
         i = self.index[prev]
         sims = self.K_play @ self.Q[i]
         if not allow_forbidden:
-            sims[self.play_forbidden] = -np.inf
+            sims[np.isin(self.play_first, self._banned_codes(banned))] = -np.inf
         retrieve = min(retrieve, len(sims) - 1)
         top = np.argpartition(-sims, retrieve)[:retrieve]
         top = top[np.isfinite(sims[top])]
@@ -155,7 +168,8 @@ class AssociationModel:
                 break
         return out
 
-    def forbidden_pressure_many(self, words: list[str], used: set[str], k: int = 20) -> np.ndarray:
+    def forbidden_pressure_many(self, words: list[str], used: set[str], k: int = 20,
+                                banned: str = DEFAULT_BANNED) -> np.ndarray:
         """For each word, the share of its k most natural follow-ups (player head) that the
         next player cannot use: banned initial letter or already played. One matmul."""
         idx = np.array([self.index[w] for w in words])
@@ -167,8 +181,9 @@ class AssociationModel:
             norm_i = self.normalize(self.words[i])
             picks = [self.words[j] for j in self.play_idx[col]
                      if self.normalize(self.words[j]) != norm_i][:k]
-            out[c] = sum(w[0] in FORBIDDEN or self.normalize(w) in used for w in picks) / max(1, len(picks))
+            out[c] = sum(w[0] in banned or self.normalize(w) in used for w in picks) / max(1, len(picks))
         return out
 
-    def forbidden_pressure(self, w: str, used: set[str], k: int = 20) -> float:
-        return float(self.forbidden_pressure_many([w], used, k)[0])
+    def forbidden_pressure(self, w: str, used: set[str], k: int = 20,
+                           banned: str = DEFAULT_BANNED) -> float:
+        return float(self.forbidden_pressure_many([w], used, k, banned)[0])

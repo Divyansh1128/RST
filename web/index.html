@@ -74,7 +74,7 @@
 
       <div class="rules">
         <div class="rule"><span class="rule-n">01</span><h3>Link it</h3><p>Your word has to relate to the last one. A neural model judges every link in milliseconds.</p></div>
-        <div class="rule"><span class="rule-n">02</span><h3>Dodge R, S, T</h3><p>Those three letters are off-limits as a first letter. Harder than it sounds under a ticking clock.</p></div>
+        <div class="rule"><span class="rule-n">02</span><h3>Dodge R, S, T</h3><p>Those three letters are off-limits as a first letter — or any three your host picks. Harder than it sounds under a ticking clock.</p></div>
         <div class="rule"><span class="rule-n">03</span><h3>No repeats</h3><p>Every word counts once per game — <i>cat</i> and <i>cats</i> are the same word.</p></div>
         <div class="rule"><span class="rule-n">04</span><h3>Last one standing</h3><p>Miss and you lose a life; the next player answers the same word. Bold links score extra.</p></div>
       </div>
@@ -134,6 +134,16 @@
                 <button data-v="lenient">Lenient</button><button data-v="normal">Normal</button><button data-v="strict">Strict</button>
               </div>
             </div>
+            <div class="setting">
+              <span>Banned letters</span>
+              <div class="seg seg-wrap" id="letterPresets">
+                <button data-set="rst">R S T</button><button data-set="xyz">Easy</button><button data-set="aei">Vowels</button><button data-set="cps">Brutal</button><button data-set="random">Random</button>
+              </div>
+              <div class="letter-pick" id="letterPick" aria-label="Banned letters">
+                <input maxlength="2" autocapitalize="characters" aria-label="Banned letter 1"><input maxlength="2" autocapitalize="characters" aria-label="Banned letter 2"><input maxlength="2" autocapitalize="characters" aria-label="Banned letter 3">
+              </div>
+              <div class="meter-row"><div class="block-meter"><i id="blockFill"></i></div><span id="blockLabel" class="hint"></span></div>
+            </div>
             <p class="hint" id="hostHint"></p>
           </div>
           <button id="startBtn" class="btn btn-primary btn-xl">Start game</button>
@@ -148,6 +158,7 @@
         <div class="stage">
           <div class="chain" id="chain"></div>
           <div class="current">
+            <div class="banned-strip" id="bannedStrip" aria-label="Banned letters"></div>
             <p class="eyebrow" id="turnLabel">—</p>
             <div class="current-word" id="currentWord">—</div>
             <div class="fuse"><div class="fuse-fill" id="fuse"></div></div>
@@ -161,6 +172,7 @@
             <button class="btn btn-primary" id="moveBtn">Play</button>
           </form>
           <p class="their-typing" id="typing"></p>
+          <button type="button" id="endBtn" class="btn btn-ghost end-btn" hidden>End game — leader on points wins</button>
         </div>
 
         <aside class="side">
