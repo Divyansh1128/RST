@@ -1,0 +1,4 @@
+# Serving only (the model is trained in Colab; see notebooks/)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+numpy>=1.26

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>RST — the word game</title>
+  <meta name="description" content="Say a related word. Just not one that starts with R, S or T. Play online with friends or AI.">
+  <meta name="theme-color" content="#F3EEE4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14130F" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='4' width='56' height='56' rx='12' fill='%231B1A17'/><text x='32' y='44' font-family='Georgia' font-size='34' text-anchor='middle' fill='%23F3EEE4'>a</text><path d='M14 50 L50 14' stroke='%23E4472B' stroke-width='5' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" data-nav="home" aria-label="RST home">
+      <span class="brand-tiles"><b>R</b><b>S</b><b>T</b></span>
+      <span class="brand-word">the word game</span>
+    </a>
+    <div class="topbar-right">
+      <span id="roomChip" class="room-chip" hidden></span>
+      <button id="themeBtn" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- HOME -->
+    <section id="view-home" class="view">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">A party game of quick associations</p>
+          <h1>Say a word that fits.<br><em>Just not</em> one that starts with
+            <span class="ban">R</span>, <span class="ban">S</span> or <span class="ban">T</span>.</h1>
+          <p class="lede">Take turns linking words — <i>ocean</i> → <i>wave</i> → <i>hello</i>.
+            Slip up, repeat, or freeze and you lose a life. Up to seven players, online,
+            with friends or AI opponents trained on how people actually associate words.</p>
+
+          <form id="nameForm" class="card join-card" autocomplete="off">
+            <label class="field">
+              <span>Your name</span>
+              <input id="nameInput" maxlength="18" placeholder="e.g. Priya" required>
+            </label>
+            <div class="join-row">
+              <button type="button" id="createBtn" class="btn btn-primary">Create a room</button>
+              <span class="or">or</span>
+              <div class="code-join">
+                <input id="codeInput" maxlength="5" placeholder="CODE" aria-label="Room code" autocapitalize="characters">
+                <button type="button" id="joinBtn" class="btn">Join</button>
+              </div>
+            </div>
+            <button type="button" id="soloBtn" class="btn btn-ghost">Practice solo against AI →</button>
+            <p id="homeError" class="error" role="alert"></p>
+          </form>
+        </div>
+
+        <div class="hero-demo" aria-hidden="true">
+          <div class="demo-stack">
+            <div class="demo-tile ok" style="--r:-4deg">ocean</div>
+            <div class="demo-arrow">↓</div>
+            <div class="demo-tile ok" style="--r:3deg">wave</div>
+            <div class="demo-arrow">↓</div>
+            <div class="demo-tile bad" style="--r:-2deg">surf<span class="stamp">NO&nbsp;S</span></div>
+            <div class="demo-arrow">↓</div>
+            <div class="demo-tile ok" style="--r:2deg">hello</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules">
+        <div class="rule"><span class="rule-n">01</span><h3>Link it</h3><p>Your word has to relate to the last one. A neural model judges every link in milliseconds.</p></div>
+        <div class="rule"><span class="rule-n">02</span><h3>Dodge R, S, T</h3><p>Those three letters are off-limits as a first letter. Harder than it sounds under a ticking clock.</p></div>
+        <div class="rule"><span class="rule-n">03</span><h3>No repeats</h3><p>Every word counts once per game — <i>cat</i> and <i>cats</i> are the same word.</p></div>
+        <div class="rule"><span class="rule-n">04</span><h3>Last one standing</h3><p>Miss and you lose a life; the next player answers the same word. Bold links score extra.</p></div>
+      </div>
+    </section>
+
+    <!-- LOBBY -->
+    <section id="view-lobby" class="view" hidden>
+      <div class="lobby">
+        <div class="lobby-main">
+          <div class="code-banner card">
+            <div>
+              <p class="eyebrow">Room code</p>
+              <div id="bigCode" class="big-code"></div>
+            </div>
+            <div class="code-actions">
+              <button id="copyLink" class="btn">Copy invite link</button>
+              <span class="hint">Friends join at this page with the code.</span>
+            </div>
+          </div>
+
+          <div class="seats-head">
+            <h2>Players <span id="seatCount" class="muted"></span></h2>
+          </div>
+          <ul id="seatList" class="seat-list"></ul>
+
+          <div id="botPanel" class="card bot-panel">
+            <div class="bot-panel-head">
+              <h3>Add an AI player</h3>
+              <span class="hint">Fill empty seats. Pick how good they are.</span>
+            </div>
+            <div class="skill-picker" role="radiogroup" aria-label="AI skill">
+              <!-- filled by JS -->
+            </div>
+            <div class="skill-desc" id="skillDesc"></div>
+            <button id="addBotBtn" class="btn btn-primary">Add AI player</button>
+          </div>
+        </div>
+
+        <aside class="lobby-side">
+          <div class="card settings" id="settingsCard">
+            <h3>Table rules</h3>
+            <div class="setting">
+              <span>Turn timer</span>
+              <div class="seg" data-key="turnSeconds">
+                <button data-v="8">8s</button><button data-v="15">15s</button><button data-v="25">25s</button>
+              </div>
+            </div>
+            <div class="setting">
+              <span>Lives</span>
+              <div class="seg" data-key="lives">
+                <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button>
+              </div>
+            </div>
+            <div class="setting">
+              <span>Judge</span>
+              <div class="seg" data-key="strictness">
+                <button data-v="lenient">Lenient</button><button data-v="normal">Normal</button><button data-v="strict">Strict</button>
+              </div>
+            </div>
+            <p class="hint" id="hostHint"></p>
+          </div>
+          <button id="startBtn" class="btn btn-primary btn-xl">Start game</button>
+          <button id="leaveBtn" class="btn btn-ghost">Leave room</button>
+        </aside>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section id="view-game" class="view" hidden>
+      <div class="table">
+        <div class="stage">
+          <div class="chain" id="chain"></div>
+          <div class="current">
+            <p class="eyebrow" id="turnLabel">—</p>
+            <div class="current-word" id="currentWord">—</div>
+            <div class="fuse"><div class="fuse-fill" id="fuse"></div></div>
+          </div>
+
+          <form id="moveForm" class="move-form" autocomplete="off">
+            <div class="move-input-wrap" id="moveWrap">
+              <input id="moveInput" maxlength="32" placeholder="Your word…" spellcheck="false" autocapitalize="none" enterkeyhint="send">
+              <span class="move-warn" id="moveWarn">Starts with a banned letter</span>
+            </div>
+            <button class="btn btn-primary" id="moveBtn">Play</button>
+          </form>
+          <p class="their-typing" id="typing"></p>
+        </div>
+
+        <aside class="side">
+          <ul class="players" id="players"></ul>
+          <div class="feed card">
+            <h3>Moves</h3>
+            <ol id="feed"></ol>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- OVER -->
+    <section id="view-over" class="view" hidden>
+      <div class="over">
+        <p class="eyebrow">Game over</p>
+        <h1 id="winnerLine"></h1>
+        <div class="final-chain" id="finalChain"></div>
+        <ol class="standings" id="standings"></ol>
+        <div class="over-actions">
+          <button id="againBtn" class="btn btn-primary btn-xl">Back to lobby</button>
+          <button id="homeBtn" class="btn btn-ghost">Leave</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <footer class="foot">
+    <span>RST · associations judged by a neural model trained on human word-association data</span>
+    <span id="modelTag" class="mono"></span>
+  </footer>
+  <script src="/assets/app.js" type="module"></script>
+</body>
+</html>

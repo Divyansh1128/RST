@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+data/
+# Model artifacts: only the trained model is versioned (the server and Render need it).
+/artifacts/*
+!/artifacts/README.md
+!/artifacts/trained/
+notebooks/.ipynb_checkpoints/

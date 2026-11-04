@@ -1,0 +1,9 @@
+.venv
+.git
+data
+notebooks
+docs
+tests
+artifacts/baseline
+artifacts/current
+**/__pycache__

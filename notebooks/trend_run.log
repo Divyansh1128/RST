@@ -1,0 +1,196 @@
+
+Executing cell 2 ...
+Device: cpu 
+Config: {
+  "EMB": "glove100",
+  "VOCAB": 4000,
+  "SEED": 13,
+  "SMOKE": true,
+  "DATA_DIR": "/private/tmp/rst_smoke",
+  "ARTIFACT_DIR": "/private/tmp/rst_smoke/trend_artifacts",
+  "BATCH": 64,
+  "NEGATIVES": 128,
+  "STEPS": 1500,
+  "LR_HEAD": 0.001,
+  "LR_EMB": 0.0001,
+  "Z": 128,
+  "HIDDEN": 256,
+  "TAU": 0.07,
+  "DRIFT": 0.01,
+  "DROPOUT": 0.1,
+  "EVAL_EVERY": 50,
+  "PATIENCE": 100,
+  "JUDGE_EVAL_MAX": 1000,
+  "SELECTION_CUES": 400,
+  "HARD_POOL": 64,
+  "HARD_BATCH": 64,
+  "ENCODE_BATCH": 2048,
+  "EVAL_BATCH": 128,
+  "CN_CHUNK": 100000,
+  "EXTRA_VOCAB": 10000,
+  "CPU_THREADS": 4
+}
+
+Executing cell 4 ...
+Cached: eat.json
+eat root: dict sample: [('0', [{'NOTHING': '13'}, {'ZERO': '9'}, {'DEAR': '3'}, {'BLANK': '2'}, {'NO': '2'}, {'OH': '2'}, {'0': '2'}, {'<INFINITY>': '1'}, {'?': '1'}, {'ANOTHER': '1'}, {'ANYTHING': '1'}, {'BINARY': '1'}, {'CAROL': '1'}, {'COWBOY': '1'}, {'GOD': '1'}, {'HELL': '1'}, {'KNICKERS': '1'}, {'LUST': '1'}, {'MY GOD': '1'}, {'NIL': '1'}, {'ODD': '1'}, {'QUERY': '1'}, {'QUESTION': '1'}, {'ROCKETS': '1'}, {'SHIT': '1'}, {'SNEAKY': '1'}, {'UNIVERSE': '1'}, {'WOW': '1'}, {'10': '1'}, {'7': '1'}])]
+Cached: usf.json
+usf root: dict sample: [('A', {'_count': 152, 'B': {'_count': 69}, 'ALPHABET': {'_count': 10}, 'THE': {'_count': 10}, 'GRADE': {'_count': 9}, 'LETTER': {'_count': 6}, 'PLUS': {'_count': 5}, 'AN': {'_count': 4}, 'Z': {'_count': 3}, 'AND': {'_count': 2}, 'APPLE': {'_count': 2}, 'GREAT': {'_count': 2}, 'ONE': {'_count': 2}, 'WORD': {'_count': 2}})]
+Human edges: Counter({'eat': 293223, 'usf': 70281})
+Cached: bad_words.txt
+SMOKE: ConceptNet disabled
+Cached: glove.6B.100d.txt.gz
+GloVe rows retained: 74650 ; raw source edges: 363504
+
+Executing cell 6 ...
+Base: 4000 extensions: 10000 eligible pair words excluded by cap: 6719
+PASS: base + appended extensions in descending Zipf order; first words: ['the', 'to', 'and', 'of', 'in', 'is', 'for', 'that', 'you', 'it']
+Vocabulary: 14000 dimension: 100 playable: 12796 legal RST outputs: 9871 seed nouns: 1500
+Seed sample: ['back', 'world', 'great', 'man', 'home', 'come', 'house', 'place', 'end', 'left', 'city', 'women', 'person', 'water', 'call', 'head', 'national', 'white', 'american', 'open', 'children', 'general', 'area', 'car', 'face', 'president', 'working', 'book', 'friends', 'local']
+
+Executing cell 8 ...
+Attested lookup pairs (deduplicated, both directions): 482053
+   split  cue_lemmas  retained_cues   pairs     eat    usf  conceptnet
+0  train        4908           5992  176770  151789  41041           0
+1    val         613            723   25419   21768   6094           0
+2   test         614            712   24792   20934   6321           0
+Strictly removed edges: 40428 ; reverse training additions: 0
+
+Executing cell 10 ...
+Hard pools: 64 / 7427
+Hard pools: 1344 / 7427
+Hard pools: 2624 / 7427
+Hard pools: 3904 / 7427
+Hard pools: 5184 / 7427
+Hard pools: 6464 / 7427
+PASS: zero-initialized residual player equals GloVe; max vector error: 8.940696716308594e-08
+Initial validation subset: {'recall@5': 0.059357662204938696, 'recall@10': 0.08875182424622993, 'recall@50': 0.2003803859336326, 'mrr': 0.5156180787600401, 'cues': 400, 'evaluated_cues': 400, 'no_legal_reference_cues': 0, 'total_references': 13896, 'excluded_illegal_references': 4029}
+Step 50: loss=4.0547, val AUC=0.7134, val R@10=0.1100, sum=0.8234, elapsed=2.1s
+Step 100: loss=3.8745, val AUC=0.7299, val R@10=0.1181, sum=0.8480, elapsed=3.5s
+Projected training wall time: 0.9 minutes (excludes downloads/preprocessing).
+Step 150: loss=3.4735, val AUC=0.7410, val R@10=0.1181, sum=0.8591, elapsed=5.5s
+Step 200: loss=3.4533, val AUC=0.7550, val R@10=0.1197, sum=0.8748, elapsed=7.5s
+Step 250: loss=3.6994, val AUC=0.7668, val R@10=0.1246, sum=0.8915, elapsed=9.1s
+Step 300: loss=3.4913, val AUC=0.7848, val R@10=0.1275, sum=0.9123, elapsed=10.8s
+Step 350: loss=3.5530, val AUC=0.8007, val R@10=0.1275, sum=0.9282, elapsed=12.2s
+Step 400: loss=3.8598, val AUC=0.8064, val R@10=0.1266, sum=0.9330, elapsed=13.7s
+Step 450: loss=3.8881, val AUC=0.8116, val R@10=0.1292, sum=0.9408, elapsed=15.2s
+Step 500: loss=3.7415, val AUC=0.8180, val R@10=0.1271, sum=0.9451, elapsed=16.9s
+Step 550: loss=3.6287, val AUC=0.8185, val R@10=0.1293, sum=0.9479, elapsed=18.1s
+Step 600: loss=3.6877, val AUC=0.8218, val R@10=0.1361, sum=0.9580, elapsed=19.5s
+Step 650: loss=3.4592, val AUC=0.8244, val R@10=0.1325, sum=0.9569, elapsed=21.0s
+Step 700: loss=3.6849, val AUC=0.8242, val R@10=0.1376, sum=0.9618, elapsed=22.7s
+Step 750: loss=3.4718, val AUC=0.8281, val R@10=0.1346, sum=0.9627, elapsed=24.7s
+Step 800: loss=3.2720, val AUC=0.8281, val R@10=0.1354, sum=0.9635, elapsed=27.8s
+Step 850: loss=3.4799, val AUC=0.8293, val R@10=0.1362, sum=0.9655, elapsed=30.2s
+Step 900: loss=3.5774, val AUC=0.8293, val R@10=0.1390, sum=0.9683, elapsed=32.9s
+Step 950: loss=3.7314, val AUC=0.8308, val R@10=0.1353, sum=0.9661, elapsed=34.7s
+Step 1000: loss=3.2324, val AUC=0.8305, val R@10=0.1351, sum=0.9656, elapsed=36.8s
+Step 1050: loss=3.4423, val AUC=0.8319, val R@10=0.1341, sum=0.9659, elapsed=38.5s
+Step 1100: loss=3.6541, val AUC=0.8320, val R@10=0.1360, sum=0.9680, elapsed=40.2s
+Step 1150: loss=3.5148, val AUC=0.8318, val R@10=0.1352, sum=0.9670, elapsed=41.9s
+Step 1200: loss=3.5669, val AUC=0.8325, val R@10=0.1335, sum=0.9660, elapsed=43.3s
+Step 1250: loss=3.3345, val AUC=0.8327, val R@10=0.1370, sum=0.9697, elapsed=44.5s
+Step 1300: loss=3.9103, val AUC=0.8329, val R@10=0.1374, sum=0.9703, elapsed=46.1s
+Step 1350: loss=3.3472, val AUC=0.8332, val R@10=0.1369, sum=0.9701, elapsed=48.0s
+Step 1400: loss=3.2126, val AUC=0.8334, val R@10=0.1375, sum=0.9709, elapsed=49.8s
+Step 1450: loss=3.1767, val AUC=0.8334, val R@10=0.1373, sum=0.9707, elapsed=51.4s
+Step 1500: loss=3.7230, val AUC=0.8334, val R@10=0.1373, sum=0.9708, elapsed=52.7s
+Selected step: 1400 ; val AUC + R@10: 0.9709157521513928 ; training seconds: 52.71
+
+Executing cell 12 ...
+  split  ...  achieved_far_at_10pct_val_far
+0   val  ...                         0.0995
+1  test  ...                         0.1220
+2   val  ...                         0.0995
+3  test  ...                         0.1080
+
+[4 rows x 11 columns]
+Trained Platt [a, b]: [0.8731914162635803, 0.04138021916151047] baseline: [5.573066234588623, -2.237414598464966]
+  split     model  ...  total_references  excluded_illegal_references
+0   val  baseline  ...             25419                         7281
+1   val   trained  ...             25419                         7281
+2  test  baseline  ...             24792                         7211
+3  test   trained  ...             24792                         7211
+
+[4 rows x 11 columns]
+               pair  baseline   trained         status
+0           cat dog  0.934979  0.988403  in vocabulary
+1          cat purr       NaN       NaN            OOV
+2    coffee morning  0.487860  0.730324  in vocabulary
+3        ocean wave  0.608700  0.804510  in vocabulary
+4   doctor hospital  0.833206  0.975538  in vocabulary
+5        bank river  0.407753  0.738532  in vocabulary
+6        bank money  0.720986  0.964186  in vocabulary
+7          hot cold  0.858630  0.978313  in vocabulary
+8         cat piano  0.270752  0.453302  in vocabulary
+9      apple galaxy  0.210582  0.269381  in vocabulary
+10         dog bark  0.464284  0.919192  in vocabulary
+11         bird fly  0.583752  0.919992  in vocabulary
+12         car road  0.680766  0.922103  in vocabulary
+13      food hunger  0.598543  0.893377  in vocabulary
+14        book read  0.851177  0.978984  in vocabulary
+15       night moon  0.504130  0.885041  in vocabulary
+16        shoe foot  0.567178  0.933309  in vocabulary
+17       fish water  0.745352  0.957931  in vocabulary
+18        tree leaf  0.787447  0.973427  in vocabulary
+19         milk cow  0.753532  0.962126  in vocabulary
+20    rain umbrella  0.170286  0.622451  in vocabulary
+21       fire smoke  0.740293  0.966757  in vocabulary
+22         ice cold  0.760290  0.964637  in vocabulary
+23         sun warm  0.599882  0.944639  in vocabulary
+24       king queen  0.875083  0.980616  in vocabulary
+25      chair table  0.624136  0.957824  in vocabulary
+26     music guitar  0.834728  0.978503  in vocabulary
+27     bread butter  0.860514  0.979063  in vocabulary
+28   school teacher  0.877372  0.982388  in vocabulary
+29       phone call  0.798857  0.949842  in vocabulary
+30      apple fruit  0.679040  0.957867  in vocabulary
+31       cat kitten  0.705294  0.960863  in vocabulary
+       cue     model                                         candidates
+0      cat  baseline  dog, monkey, pet, dogs, mouse, puppy, elephant...
+1      cat   trained  dog, animal, monkey, pet, mouse, dogs, puppy, ...
+2   coffee  baseline  drinks, beer, cocoa, wine, drink, corn, bread,...
+3   coffee   trained  drink, beer, food, wine, drinks, chocolate, fr...
+4    ocean  baseline  waters, coast, atlantic, pacific, coastal, arc...
+5    ocean   trained  waters, water, atlantic, coast, pacific, waves...
+6   doctor  baseline  physician, nurse, patient, medical, hospital, ...
+7   doctor   trained  physician, nurse, patient, hospital, dentist, ...
+8     bank  baseline  credit, investment, financial, funds, finance,...
+9     bank   trained  money, credit, deposit, funds, fund, cash, cap...
+10     hot  baseline  cool, cold, warm, heat, dry, ice, mix, water, ...
+11     hot   trained  cool, warm, heat, cold, water, wet, ice, chill...
+12   apple  baseline  dell, google, blackberry, computer, chips, har...
+13   apple   trained  pear, peach, fruit, mango, blackberry, cherry,...
+14   music  baseline  musical, dance, pop, folk, jazz, concert, arti...
+15   music   trained  dance, pop, concert, orchestra, musical, noise...
+RST_train_association_model.ipynb:cell-12:79: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+Elapsed before export: 83.83 seconds
+
+Executing cell 14 ...
+     level  threshold  ...  test_far  test_false_reject
+0  lenient   0.409129  ...    0.1600              0.296
+1   normal   0.529319  ...    0.0875              0.409
+2   strict   0.662052  ...    0.0380              0.566
+
+[3 rows x 7 columns]
+
+Executing cell 16 ...
+Artifacts: /private/tmp/rst_smoke/trend_artifacts
+Artifact MB: 17.02
+
+Executing cell 17 ...
+PASS: NumPy-only serving contract, 1000 pairs, max probability error=0.00020134
+Zip: /private/tmp/rst_smoke/trend_artifacts.zip ; pipeline minutes: 1.42
+Final model-only results (attested lookup excluded):
+  split     model  judge_auc  player_recall10  player_mrr
+0   val  baseline   0.728850         0.089613    0.530384
+1   val   trained   0.833412         0.136736    0.685294
+2  test  baseline   0.729567         0.092134    0.548843
+3  test   trained   0.843054         0.142482    0.686239
+Selected checkpoint: 1400 ; known pairs: 482053 ; dimensions E/Z/Q: 100 128 100 ; max parity error: 0.00020134449005126953
+Outside Colab: download the zip from the printed path.
+PASS: server.nlp.AssociationModel loads artifacts, 1000-pair parity max error 0.0
+cat candidates: [('dog', 0.9884033799171448), ('animal', 0.9720277190208435), ('monkey', 0.9796656966209412), ('pet', 0.9779641628265381), ('mouse', 0.978022575378418), ('puppy', 0.9756792187690735), ('bird', 0.9717326164245605), ('pig', 0.9675644636154175), ('duck', 0.9677261114120483), ('elephant', 0.9706161022186279)]
+Trend checks (reported honestly; no retries): {'val_recall10_beats_baseline': True, 'val_mrr_beats_baseline': True, 'val_judge_auc_beats_baseline': True}
+Retained metrics: notebooks/trend_metrics.json ; runner seconds: 92.81497945776209

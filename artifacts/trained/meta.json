@@ -1,0 +1,179 @@
+{
+ "version": "rst-assoc-v1-glove300-20261104",
+ "judge": "mlp",
+ "judge_formula": "mlp(x) + w_cos*cos",
+ "dim_e": 300,
+ "dim_z": 128,
+ "dim_q": 300,
+ "known_pairs_count": 1149977,
+ "platt": [
+  0.552469690275974,
+  -0.3000298702275134
+ ],
+ "thresholds": {
+  "lenient": 0.46021342277526855,
+  "normal": 0.5696089267730713,
+  "strict": 0.6872730851173401
+ },
+ "metrics": {
+  "judge": {
+   "baseline": {
+    "roc_auc": 0.6868361961805556,
+    "pr_auc": 0.6192145082682882,
+    "brier": 0.19209022547246257,
+    "n": 36000,
+    "positives": 12000,
+    "false_reject_at_5pct_val_far": 0.6760833333333334,
+    "achieved_far_at_5pct_val_far": 0.045875,
+    "false_reject_at_10pct_val_far": 0.6090833333333333,
+    "achieved_far_at_10pct_val_far": 0.09070833333333334
+   },
+   "trained": {
+    "roc_auc": 0.8372553767361111,
+    "pr_auc": 0.7462911553183469,
+    "brier": 0.14923824666014904,
+    "n": 36000,
+    "positives": 12000,
+    "false_reject_at_5pct_val_far": 0.596,
+    "achieved_far_at_5pct_val_far": 0.04595833333333333,
+    "false_reject_at_10pct_val_far": 0.4721666666666667,
+    "achieved_far_at_10pct_val_far": 0.0915
+   }
+  },
+  "player": {
+   "baseline": {
+    "recall@5": 0.10043408368514024,
+    "recall@10": 0.13830575015936014,
+    "recall@50": 0.24879311911990462,
+    "mrr": 0.34468055267920467,
+    "cues": 3103,
+    "evaluated_cues": 2932,
+    "no_legal_reference_cues": 171,
+    "total_references": 59818,
+    "excluded_illegal_references": 16584
+   },
+   "trained": {
+    "recall@5": 0.16064694150502962,
+    "recall@10": 0.21002580683596073,
+    "recall@50": 0.3504005031422351,
+    "mrr": 0.4705731102657812,
+    "cues": 3103,
+    "evaluated_cues": 2932,
+    "no_legal_reference_cues": 171,
+    "total_references": 59818,
+    "excluded_illegal_references": 16584
+   }
+  }
+ },
+ "data": {
+  "glove": {
+   "url": "https://huggingface.co/kcz358/glove/resolve/main/glove.6B/glove.6B.300d.txt",
+   "license": "PDDL 1.0; Stanford GloVe 6B"
+  },
+  "eat": {
+   "url": "https://raw.githubusercontent.com/dariusk/ea-thesaurus/master/ea-thesaurus.json",
+   "license": "Mirror declares Open Government Licence; original licensor provenance unconfirmed"
+  },
+  "usf": {
+   "url": "https://raw.githubusercontent.com/jmichaelov/easy-fas/main/usffan_dict.json",
+   "license": "Original norms deployment license unresolved; mirror code MIT does not relicense data"
+  },
+  "bad_words": {
+   "url": "https://raw.githubusercontent.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/master/en",
+   "license": "CC BY 4.0; LDNOOBW / Shutterstock contributors"
+  },
+  "conceptnet": {
+   "url": "https://huggingface.co/datasets/openworld-domains/conceptnet-full-en-essentials/resolve/main/conceptnet-full-en-essentials.csv",
+   "license": "CC BY-SA 4.0; ConceptNet contributors; mirror may omit provenance/weights"
+  },
+  "wordfreq": {
+   "url": "https://github.com/rspeer/wordfreq",
+   "license": "Data CC BY-SA 4.0; software Apache 2.0; Robyn Speer and contributors"
+  },
+  "wordnet": {
+   "url": "https://wordnet.princeton.edu/license-and-commercial-use",
+   "license": "Princeton WordNet license; retain Princeton copyright/permission notices"
+  }
+ },
+ "config": {
+  "EMB": "glove300",
+  "VOCAB": 30000,
+  "SEED": 13,
+  "SMOKE": false,
+  "DATA_DIR": "/content/data",
+  "ARTIFACT_DIR": "/content/rst_artifacts",
+  "BATCH": 256,
+  "NEGATIVES": 256,
+  "STEPS": 4000,
+  "LR_HEAD": 0.001,
+  "LR_EMB": 0.0001,
+  "Z": 128,
+  "HIDDEN": 256,
+  "TAU": 0.07,
+  "DRIFT": 0.01,
+  "DROPOUT": 0.1,
+  "EVAL_EVERY": 100,
+  "PATIENCE": 8,
+  "JUDGE_EVAL_MAX": 12000,
+  "SELECTION_CUES": 400,
+  "HARD_POOL": 64,
+  "HARD_BATCH": 128,
+  "ENCODE_BATCH": 2048,
+  "EVAL_BATCH": 128,
+  "CN_CHUNK": 100000,
+  "EXTRA_VOCAB": 10000,
+  "CPU_THREADS": 4
+ },
+ "hub": {
+  "beta": 0.4,
+  "n_cues": 200,
+  "threshold": "normal",
+  "tradeoff": [
+   {
+    "beta": 0,
+    "hub_false_accept": 0.15413333333333334,
+    "known_recall": 0.54985
+   },
+   {
+    "beta": 0.1,
+    "hub_false_accept": 0.13994666666666666,
+    "known_recall": 0.5435
+   },
+   {
+    "beta": 0.2,
+    "hub_false_accept": 0.12696,
+    "known_recall": 0.5364
+   },
+   {
+    "beta": 0.3,
+    "hub_false_accept": 0.11474666666666666,
+    "known_recall": 0.52865
+   },
+   {
+    "beta": 0.4,
+    "hub_false_accept": 0.10279333333333333,
+    "known_recall": 0.5209
+   },
+   {
+    "beta": 0.5,
+    "hub_false_accept": 0.09140666666666666,
+    "known_recall": 0.51455
+   },
+   {
+    "beta": 0.6,
+    "hub_false_accept": 0.08076666666666667,
+    "known_recall": 0.50715
+   },
+   {
+    "beta": 0.8,
+    "hub_false_accept": 0.06212666666666666,
+    "known_recall": 0.49315
+   },
+   {
+    "beta": 1.0,
+    "hub_false_accept": 0.046253333333333334,
+    "known_recall": 0.4784
+   }
+  ]
+ }
+}
