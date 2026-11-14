@@ -148,15 +148,25 @@ function renderLobby() {
   const st = S.state, host = st.hostId === S.me;
   $("#bigCode").textContent = st.code;
   $("#seatCount").textContent = `${st.players.length} / ${st.maxPlayers}`;
+  S.seenSeats ??= new Set();
+  const isNew = p => !S.seenSeats.has(p.id);
   const seats = st.players.map(p => `
-    <li class="seat">
+    <li class="seat${isNew(p) ? " new" : ""}">
       ${avatar(p)}
       <div class="who"><div class="name">${esc(p.name)}</div>
         <div class="tag">${p.isBot ? `AI · ${skillLabel(p.difficulty)}` : p.id === st.hostId ? "host" : "player"}${p.id === S.me ? " · you" : ""}${!p.connected ? " · away" : ""}</div></div>
       ${host && p.id !== S.me ? `<button class="x" data-kick="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>` : ""}
     </li>`);
   for (let i = st.players.length; i < st.maxPlayers; i++) seats.push(`<li class="seat empty">open seat</li>`);
-  $("#seatList").innerHTML = seats.join("");
+  const teams = st.settings.mode === "teams";
+  $("#seatList").hidden = teams;
+  $("#teamBoard").hidden = !teams;
+  $("#teamHint").hidden = !teams;
+  $("#teamsSetting").hidden = !teams;
+  $("#livesLabel").textContent = teams ? "Lives per team" : "Lives";
+  if (teams) renderTeamBoard(host, isNew);
+  else $("#seatList").innerHTML = seats.join("");
+  st.players.forEach(p => S.seenSeats.add(p.id));
   $$("[data-kick]").forEach(b => b.onclick = () => send("remove", { playerId: b.dataset.kick }));
 
   $("#botPanel").hidden = !host;
@@ -170,9 +180,92 @@ function renderLobby() {
   $("#hostHint").textContent = host ? "You're the host — you set the rules." : `${esc(player(st.hostId)?.name || "The host")} sets the rules.`;
   const start = $("#startBtn");
   start.hidden = !host;
-  start.disabled = st.players.length < 2;
-  start.textContent = st.players.length < 2 ? "Need 2+ players" : `Start game · ${st.players.length} players`;
+  const filled = teams ? st.teams.filter(t => t.players.length).length : 0;
+  const ready = st.players.length >= 2 && (!teams || filled >= 2);
+  start.disabled = !ready;
+  start.textContent = st.players.length < 2 ? "Need 2+ players"
+    : teams && filled < 2 ? "Need players on 2+ teams"
+    : teams ? `Start game · ${filled} teams` : `Start game · ${st.players.length} players`;
 }
+
+// ---------------------------------------------------------------- teams
+function teamOf(p) { return S.state.teams?.[p.team]; }
+function renderTeamBoard(host, isNew) {
+  const st = S.state;
+  $("#teamBoard").style.setProperty("--cols", st.settings.teams);
+  $("#teamBoard").innerHTML = st.teams.map(t => `
+    <section class="team-col" data-team="${t.team}" style="--team: var(--team${t.team})">
+      <header><span class="swatch"></span><b>${esc(t.name)}</b><span class="muted">${t.players.length}</span></header>
+      <ul>${t.players.map(player).filter(Boolean).map(p => {
+        const can = host || p.id === S.me;
+        return `<li class="seat${isNew(p) ? " new" : ""}" data-pid="${p.id}" ${can ? "data-drag" : ""}>
+          ${can ? `<button class="grip" data-grip="${p.id}" aria-label="Move ${esc(p.name)} to the next team" title="Drag to another team">⠿</button>` : ""}
+          ${avatar(p)}
+          <div class="who"><div class="name">${esc(p.name)}</div>
+            <div class="tag">${p.isBot ? `AI · ${skillLabel(p.difficulty)}` : p.id === st.hostId ? "host" : "player"}${p.id === S.me ? " · you" : ""}</div></div>
+          ${host && p.id !== S.me ? `<button class="x" data-kick="${p.id}" aria-label="Remove ${esc(p.name)}">×</button>` : ""}
+        </li>`; }).join("")}
+        <li class="drop-hint">Drop players here</li>
+      </ul>
+    </section>`).join("");
+  $$("#teamBoard [data-kick]").forEach(b => b.onclick = () => send("remove", { playerId: b.dataset.kick }));
+  $$("#teamBoard [data-grip]").forEach(b => b.onclick = () => {
+    if (drag.justDropped) return;
+    const p = player(b.dataset.grip);
+    send("set_team", { playerId: p.id, team: (p.team + 1) % st.settings.teams });
+  });
+  $("#teamHint").textContent = host
+    ? `Drag players between teams (${st.players.length}/${st.maxPlayers} seats). Turns rotate between teams, so uneven teams still get equal turns.`
+    : "Drag yourself to a team. The host can move anyone.";
+}
+
+// Pointer-based drag and drop: works for mouse and touch (touch drags by the grip).
+const drag = { justDropped: false };
+document.addEventListener("pointerdown", e => {
+  const card = e.target.closest("#teamBoard .seat[data-drag]");
+  if (!card || e.button > 0) return;
+  if (e.target.closest("button:not(.grip)")) return;
+  if (e.pointerType !== "mouse" && !e.target.closest(".grip")) return;
+  const r = card.getBoundingClientRect();
+  Object.assign(drag, { pid: card.dataset.pid, x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left,
+                        dy: e.clientY - r.top, w: r.width, src: card, ghost: null, over: null });
+});
+document.addEventListener("pointermove", e => {
+  if (!drag.pid) return;
+  if (!drag.ghost) {
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
+    drag.ghost = drag.src.cloneNode(true);
+    drag.ghost.classList.add("drag-ghost");
+    drag.ghost.style.width = `${drag.w}px`;
+    document.body.appendChild(drag.ghost);
+    drag.src.classList.add("dragging");
+    document.body.classList.add("is-dragging");
+  }
+  e.preventDefault();
+  drag.ghost.style.transform = `translate(${e.clientX - drag.dx}px, ${e.clientY - drag.dy}px) rotate(-2deg)`;
+  const col = document.elementFromPoint(e.clientX, e.clientY)?.closest(".team-col");
+  if (col !== drag.over) {
+    drag.over?.classList.remove("drop-over");
+    col?.classList.add("drop-over");
+    drag.over = col;
+  }
+}, { passive: false });
+function endDrag(commit) {
+  if (!drag.pid) return;
+  if (drag.ghost) {
+    const team = drag.over ? Number(drag.over.dataset.team) : null;
+    const p = player(drag.pid);
+    if (commit && p && team !== null && team !== p.team) send("set_team", { playerId: p.id, team });
+    drag.ghost.remove();
+    drag.over?.classList.remove("drop-over");
+    $$(".dragging").forEach(x => x.classList.remove("dragging"));
+    document.body.classList.remove("is-dragging");
+    drag.justDropped = true; setTimeout(() => { drag.justDropped = false; }, 0);
+  }
+  drag.pid = null; drag.ghost = null; drag.over = null;
+}
+document.addEventListener("pointerup", () => endDrag(true));
+document.addEventListener("pointercancel", () => endDrag(false));
 
 // skill picker
 $(".skill-picker").innerHTML = SKILLS.map(s => `
@@ -189,7 +282,7 @@ pickSkill(S.skill);
 $("#addBotBtn").onclick = () => send("add_bot", { difficulty: S.skill });
 $$(".seg[data-key]").forEach(seg => seg.addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b || seg.classList.contains("locked")) return;
-  const v = seg.dataset.key === "strictness" ? b.dataset.v : Number(b.dataset.v);
+  const v = isNaN(Number(b.dataset.v)) ? b.dataset.v : Number(b.dataset.v);
   send("settings", { settings: { [seg.dataset.key]: v } });
 }));
 // banned letters
@@ -273,7 +366,7 @@ function renderGame(prev) {
     `<span class="link ${i === 0 ? "seed" : ""}" title="${esc(player(m.playerId)?.name || "start")}">${esc(m.word)}</span><span class="sep">→</span>`).join("");
   $("#chain").scrollLeft = 1e6;
 
-  $("#players").innerHTML = st.players.map(p => `
+  const plRow = p => `
     <li class="pl ${p.id === S.me ? "me" : ""} ${p.id === st.currentId ? "turn" : ""} ${p.lives <= 0 ? "out" : ""}">
       ${avatar(p)}
       <div class="who">
@@ -282,7 +375,18 @@ function renderGame(prev) {
           ${p.id === st.currentId && !p.isBot && p.id !== S.me ? '<span class="typing-dot"></span>' : ""}</div>
       </div>
       <span class="score">${p.score}</span>
-    </li>`).join("");
+    </li>`;
+  if (st.settings.mode === "teams") {
+    $("#players").innerHTML = st.teams.filter(t => t.players.length).map(t => `
+      <li class="team-head ${t.lives <= 0 ? "out" : ""}" style="--team: var(--team${t.team})">
+        <span class="swatch"></span><b>${esc(t.name)}</b>
+        <span class="lives">${Array.from({ length: st.settings.lives }, (_, i) => `<i class="${i < t.lives ? "" : "gone"}"></i>`).join("")}</span>
+        <span class="score">${t.score}</span>
+      </li>
+      ${t.players.map(player).filter(Boolean).map(p => plRow(p).replace('class="pl ', `style="--team: var(--team${t.team})" class="pl in-team ${t.lives <= 0 ? "out " : ""}`)).join("")}`).join("");
+  } else {
+    $("#players").innerHTML = st.players.map(plRow).join("");
+  }
 
   renderFeed();
   moveForm.classList.toggle("waiting", !mine);
@@ -296,10 +400,12 @@ function renderGame(prev) {
 
 function renderFeed() {
   const st = S.state;
-  $("#feed").innerHTML = st.history.slice().reverse().map(m => {
+  const fresh = Math.max(0, st.history.length - (S.feedSeen ?? st.history.length));
+  S.feedSeen = st.history.length;
+  $("#feed").innerHTML = st.history.slice().reverse().map((m, i) => {
     const p = player(m.playerId);
     const pct = m.score == null ? 0 : Math.round(m.score * 100);
-    return `<li class="${m.ok ? "ok" : "bad"}">
+    return `<li class="${m.ok ? "ok" : "bad"}${i < fresh ? " new" : ""}">
       <span class="w">${esc(m.word)}</span>
       <span class="verdict">${m.ok ? `${pct}% link` : esc(m.reason || "rejected")}</span>
       <span class="by">${esc(p?.name || "")}</span>
@@ -362,6 +468,20 @@ function startFuse() {
 function renderOver(prev) {
   const st = S.state, w = player(st.winnerId);
   const how = st.endedBy === "host" ? " on points" : "";
+  if (st.settings.mode === "teams") {
+    const wt = st.teams?.[st.winnerTeam];
+    const mine = wt && wt.players.includes(S.me);
+    $("#winnerLine").innerHTML = wt ? `Team ${esc(wt.name)} <em>wins</em>${how}.` : "No team survived.";
+    $("#standings").innerHTML = (st.teamStandings || []).map(i => st.teams[i]).map((t, r) => `
+      <li class="team-row" style="--team: var(--team${t.team})"><span class="rank">${r + 1}</span><span class="swatch big"></span>
+        <span class="name">Team ${esc(t.name)}<span class="sub">${t.players.map(player).filter(Boolean)
+          .sort((a, b) => b.score - a.score).map(p => `${esc(p.name)} ${p.score}`).join(" · ")} · ${t.lives > 0 ? `${t.lives} ${t.lives === 1 ? "life" : "lives"} left` : "out"}</span></span>
+        <span class="score">${t.score}</span></li>`).join("");
+    $("#finalChain").innerHTML = st.chain.map((m, i) => `<span><b>${esc(m.word)}</b>${i < st.chain.length - 1 ? " → " : ""}</span>`).join(" ");
+    $("#againBtn").hidden = st.hostId !== S.me;
+    if (prev?.phase === "playing" && mine) confetti();
+    return;
+  }
   $("#winnerLine").innerHTML = w ? (w.id === S.me ? `You <em>win</em>${how}.` : `${esc(w.name)} <em>wins</em>${how}.`) : "No one survived.";
   $("#finalChain").innerHTML = st.chain.map((m, i) => `<span><b>${esc(m.word)}</b>${i < st.chain.length - 1 ? " → " : ""}</span>`).join(" ");
   const ranked = (st.standings || []).map(player).filter(Boolean);

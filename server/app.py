@@ -174,6 +174,12 @@ async def handle(room: Room, player, msg: dict):
             if text:
                 await room.push({"type": "chat", "playerId": player.id, "text": text,
                                  "t": time.time()})
+        elif kind == "set_team":
+            target = str(msg.get("playerId", ""))
+            if target != player.id and not is_host:
+                raise GameError("Only the host can move other players.")
+            room.set_team(target, int(msg.get("team", -1)))
+            await room.push_state()
         elif kind == "react":
             await room.push({"type": "react", "playerId": player.id,
                              "emoji": str(msg.get("emoji", ""))[:4]})

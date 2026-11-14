@@ -10,6 +10,10 @@ Rules
   same word. Lose every life and you are out; the last player standing wins.
 * Each accepted word scores 10 points plus up to 5 for answering fast. If the
   host ends the game early, the leader on points wins (ties: lives, then misses).
+* Team mode: 2-4 teams share a pool of lives each. Turns go round-robin over the
+  teams still alive and each team rotates through its own members, so every team
+  gets the same number of turns however uneven the sizes. Last team standing (or
+  the team with most points if the host ends early) wins.
 * The clock tightens: every accepted word cuts the turn time by 4%, down to
   MIN_TURN seconds, so even perfect players eventually crack.
 """
@@ -32,6 +36,7 @@ BASE_POINTS, SPEED_POINTS = 10, 5
 CODE_ALPHABET = "".join(c for c in string.ascii_uppercase if c not in "RSTOIL") + "23456789"
 
 DIFFICULTIES = ["rookie", "casual", "sharp", "pro", "grandmaster"]
+TEAM_NAMES = ["Ink", "Ember", "Moss", "Tide"]
 BOT_NAMES = ["Ada", "Basil", "Cleo", "Dex", "Echo", "Fable", "Gus", "Hopper",
              "Iris", "Juno", "Kip", "Lumen", "Mabel", "Nova", "Otto", "Pip"]
 
@@ -45,6 +50,7 @@ class Player:
     lives: int = 3
     score: int = 0
     misses: int = 0
+    team: int | None = None
     connected: bool = True
     away_since: float | None = None
     token: str = field(default_factory=lambda: secrets.token_urlsafe(16))
@@ -56,7 +62,8 @@ class Player:
     def public(self) -> dict:
         return {"id": self.id, "name": self.name, "isBot": self.is_bot,
                 "difficulty": self.difficulty, "lives": self.lives,
-                "score": self.score, "misses": self.misses, "connected": self.connected}
+                "score": self.score, "misses": self.misses, "team": self.team,
+                "connected": self.connected}
 
 
 @dataclass
@@ -65,10 +72,13 @@ class Settings:
     lives: int = 3
     strictness: str = "normal"  # lenient | normal | strict
     banned: str = DEFAULT_BANNED  # three distinct lowercase letters, sorted
+    mode: str = "solo"  # solo | teams
+    teams: int = 2      # number of teams in team mode (2-4)
 
     def public(self) -> dict:
         return {"turnSeconds": self.turn_seconds, "lives": self.lives,
-                "strictness": self.strictness, "banned": self.banned}
+                "strictness": self.strictness, "banned": self.banned,
+                "mode": self.mode, "teams": self.teams}
 
 
 @dataclass
@@ -105,6 +115,10 @@ class Room:
         self.winner_id: str | None = None
         self.ended_by: str | None = None  # "last" (one survivor) | "host" (ended early)
         self.paused = False  # every human dropped mid-game; resumes when one returns
+        # Team mode state
+        self.team_lives: dict[int, int] = {}
+        self.team_ptr: dict[int, int] = {}   # next member to play, per team
+        self.winner_team: int | None = None
         self._timer: asyncio.Task | None = None
         self._bot_task: asyncio.Task | None = None
         self.lock = asyncio.Lock()
@@ -119,6 +133,8 @@ class Room:
             raise GameError("Game already started.")
         p = Player(id=secrets.token_hex(4), name=name[:18], is_bot=is_bot,
                    difficulty=difficulty, lives=self.settings.lives)
+        if self.teams_mode:
+            p.team = self._smallest_team()
         self.players.append(p)
         if self.host_id is None and not is_bot:
             self.host_id = p.id
@@ -175,6 +191,66 @@ class Room:
             humans = [q for q in self.players if not q.is_bot and q.connected]
             self.host_id = humans[0].id if humans else None
 
+    # ---------------------------------------------------------------- teams
+    @property
+    def teams_mode(self) -> bool:
+        return self.settings.mode == "teams"
+
+    def members(self, team: int) -> list[Player]:
+        return [p for p in self.players if p.team == team]
+
+    def _smallest_team(self) -> int:
+        return min(range(self.settings.teams), key=lambda t: (len(self.members(t)), t))
+
+    def _rebalance(self):
+        """Give every player a valid team; called when team mode or count changes."""
+        for p in self.players:
+            if p.team is None or p.team >= self.settings.teams:
+                p.team = None
+        for p in self.players:
+            if p.team is None:
+                p.team = self._smallest_team()
+
+    def set_team(self, pid: str, team: int):
+        if self.phase != "lobby":
+            raise GameError("Teams are locked once the game starts.")
+        if not self.teams_mode:
+            raise GameError("Switch to team mode first.")
+        p = self.get(pid)
+        if p is None:
+            raise GameError("No such player.")
+        if not (0 <= team < self.settings.teams):
+            raise GameError("No such team.")
+        p.team = team
+
+    def is_alive(self, p: Player) -> bool:
+        if self.teams_mode:
+            return self.team_lives.get(p.team, 0) > 0
+        return p.lives > 0
+
+    def _lose_life(self, p: Player):
+        p.misses += 1
+        if self.teams_mode:
+            self.team_lives[p.team] -= 1
+        else:
+            p.lives -= 1
+
+    def active_teams(self) -> list[int]:
+        return [t for t in range(self.settings.teams) if self.members(t)]
+
+    def team_stats(self, t: int) -> dict:
+        ms = self.members(t)
+        return {"team": t, "name": TEAM_NAMES[t], "lives": self.team_lives.get(t, self.settings.lives),
+                "score": sum(p.score for p in ms), "misses": sum(p.misses for p in ms),
+                "players": [p.id for p in ms]}
+
+    def team_standings(self) -> list[int]:
+        def key(t):
+            st = self.team_stats(t)
+            return (t != self.winner_team if self.ended_by == "last" else 0,
+                    -st["score"], -st["lives"], st["misses"])
+        return sorted(self.active_teams(), key=key)
+
     def humans_connected(self) -> bool:
         return any(q.connected and not q.is_bot for q in self.players)
 
@@ -191,6 +267,12 @@ class Room:
             s.lives = int(min(5, max(1, int(data["lives"]))))
         if data.get("strictness") in ("lenient", "normal", "strict"):
             s.strictness = data["strictness"]
+        if data.get("mode") in ("solo", "teams"):
+            s.mode = data["mode"]
+        if "teams" in data:
+            s.teams = int(min(len(TEAM_NAMES), max(2, int(data["teams"]))))
+        if s.mode == "teams":
+            self._rebalance()
         if "banned" in data:
             letters = str(data["banned"]).lower()
             if len(letters) != 3 or len(set(letters)) != 3 or not all("a" <= c <= "z" for c in letters):
@@ -215,17 +297,28 @@ class Room:
             raise GameError("Already playing.")
         if len(self.players) < 2:
             raise GameError("Need at least 2 players. Add an AI player?")
+        if self.teams_mode:
+            self._rebalance()
+            if len(self.active_teams()) < 2:
+                raise GameError("Put players in at least two teams.")
         self.phase = "playing"
         self.paused = False
         self.chain, self.history, self.used = [], [], set()
-        self.winner_id = None
+        self.winner_id = self.winner_team = None
         self.ended_by = None
         for p in self.players:
             p.lives, p.score, p.misses = self.settings.lives, 0, 0
         seed = self.model.random_seed_word(self.settings.banned)
         self.chain.append(Move(player_id="seed", word=seed, ok=True))
         self.used.add(self.model.normalize(seed))
-        self.turn_idx = random.randrange(len(self.players))
+        if self.teams_mode:
+            teams = self.active_teams()
+            self.team_lives = {t: self.settings.lives for t in teams}
+            self.team_ptr = {t: random.randrange(len(self.members(t))) for t in teams}
+            self._set_team_turn(random.choice(teams))
+        else:
+            self.team_lives, self.team_ptr = {}, {}
+            self.turn_idx = random.randrange(len(self.players))
         self.turn_no = 0
         await self._begin_turn()
 
@@ -245,8 +338,7 @@ class Room:
             left = max(0.0, (self.turn_deadline or 0) - time.time())
             cur.score += BASE_POINTS + round(SPEED_POINTS * min(1.0, left / max(0.1, self.turn_length)))
         else:
-            cur.lives -= 1
-            cur.misses += 1
+            self._lose_life(cur)
         await self._advance(last_move=move)
 
     def validate(self, word: str) -> tuple[bool, str | None, float | None]:
@@ -275,28 +367,46 @@ class Room:
             if self.phase != "playing" or self.turn_no != turn_no:
                 return
             cur = self.current
-            cur.lives -= 1
-            cur.misses += 1
+            self._lose_life(cur)
             move = Move(player_id=cur.id, word="⏱", ok=False, reason="time's up")
             self.history.append(move)
             await self._advance(last_move=move)
 
+    def _set_team_turn(self, team: int):
+        ms = self.members(team)
+        self.turn_idx = self.players.index(ms[self.team_ptr[team] % len(ms)])
+        self.team_ptr[team] += 1
+
+    async def _game_over(self, last_move: Move):
+        self.phase = "over"
+        self.ended_by = "last"
+        self._cancel_tasks()
+        await self.push({"type": "move", "move": last_move.public()})
+        await self.push_state()
+
     async def _advance(self, last_move: Move):
-        alive = [p for p in self.players if p.alive]
-        if len(alive) <= 1:
-            self.phase = "over"
-            self.winner_id = alive[0].id if alive else None
-            self.ended_by = "last"
-            self._cancel_tasks()
-            await self.push({"type": "move", "move": last_move.public()})
-            await self.push_state()
-            return
-        n = len(self.players)
-        for step in range(1, n + 1):
-            idx = (self.turn_idx + step) % n
-            if self.players[idx].alive:
-                self.turn_idx = idx
-                break
+        if self.teams_mode:
+            alive_teams = [t for t in self.active_teams() if self.team_lives[t] > 0]
+            if len(alive_teams) <= 1:
+                self.winner_team = alive_teams[0] if alive_teams else None
+                return await self._game_over(last_move)
+            cur_team = self.players[self.turn_idx].team
+            order = self.active_teams()
+            i = order.index(cur_team)
+            nxt = next(order[(i + k) % len(order)] for k in range(1, len(order) + 1)
+                       if self.team_lives[order[(i + k) % len(order)]] > 0)
+            self._set_team_turn(nxt)
+        else:
+            alive = [p for p in self.players if self.is_alive(p)]
+            if len(alive) <= 1:
+                self.winner_id = alive[0].id if alive else None
+                return await self._game_over(last_move)
+            n = len(self.players)
+            for step in range(1, n + 1):
+                idx = (self.turn_idx + step) % n
+                if self.is_alive(self.players[idx]):
+                    self.turn_idx = idx
+                    break
         await self.push({"type": "move", "move": last_move.public()})
         await self._begin_turn()
 
@@ -326,7 +436,11 @@ class Room:
 
     def standings(self) -> list[Player]:
         """Final order. A survivor of a played-out game comes first; otherwise points,
-        then lives left, then fewer misses."""
+        then lives left, then fewer misses. In team mode, players are grouped by
+        their team's rank."""
+        if self.teams_mode and self.team_lives:
+            rank = {t: i for i, t in enumerate(self.team_standings())}
+            return sorted(self.players, key=lambda p: (rank.get(p.team, 99), -p.score, p.misses))
         def key(p):
             return (p.id != self.winner_id if self.ended_by == "last" else 0,
                     -p.score, -p.lives, p.misses)
@@ -338,7 +452,10 @@ class Room:
             raise GameError("No game in progress.")
         self._cancel_tasks()
         self.phase, self.paused, self.ended_by = "over", False, "host"
-        self.winner_id = self.standings()[0].id
+        if self.teams_mode:
+            self.winner_team = self.team_standings()[0]
+        else:
+            self.winner_id = self.standings()[0].id
         await self.push_state()
 
     async def back_to_lobby(self):
@@ -350,7 +467,10 @@ class Room:
         for p in self.players:
             p.lives, p.score, p.misses = self.settings.lives, 0, 0
         self.chain, self.history = [], []
-        self.winner_id = self.ended_by = None
+        self.winner_id = self.winner_team = self.ended_by = None
+        self.team_lives, self.team_ptr = {}, {}
+        if self.teams_mode:
+            self._rebalance()
         await self.push_state()
 
     # ------------------------------------------------------------- output
@@ -369,6 +489,10 @@ class Room:
             "serverTime": time.time(),
             "winnerId": self.winner_id,
             "endedBy": self.ended_by,
+            "winnerTeam": self.winner_team,
+            "teamNames": TEAM_NAMES[: self.settings.teams],
+            "teams": [self.team_stats(t) for t in range(self.settings.teams)] if self.teams_mode else None,
+            "teamStandings": self.team_standings() if self.teams_mode and self.phase == "over" else None,
             "standings": [p.id for p in self.standings()] if self.phase == "over" else None,
             "bannedShare": round(self.model.banned_share(self.settings.banned), 3),
             "paused": self.paused,

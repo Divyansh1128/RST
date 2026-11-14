@@ -253,3 +253,92 @@ def test_scoring_is_base_plus_speed_bonus():
         assert cur.score == 15
         room._cancel_tasks()
     run(go())
+
+
+def make_team_room(sizes):
+    room = Room("ABCDE", FakeModel(), _noop)
+    room.update_settings({"mode": "teams", "teams": len(sizes)})
+    ps = [room.add_player(f"P{i}") for i in range(sum(sizes))]
+    k = 0
+    for t, n in enumerate(sizes):
+        for _ in range(n):
+            room.set_team(ps[k].id, t); k += 1
+    return room, ps
+
+
+def test_new_players_join_smallest_team_and_rebalance_on_fewer_teams():
+    room = Room("ABCDE", FakeModel(), _noop)
+    room.update_settings({"mode": "teams", "teams": 3})
+    ps = [room.add_player(f"P{i}") for i in range(5)]
+    assert sorted(len(room.members(t)) for t in range(3)) == [1, 2, 2]
+    room.update_settings({"teams": 2})
+    assert all(p.team in (0, 1) for p in ps)
+
+
+def test_team_turns_alternate_and_rotate_members_even_when_uneven():
+    async def go():
+        room, ps = make_team_room([1, 3])
+        await room.start()
+        seen = []
+        for _ in range(8):
+            seen.append(room.current)
+            room._cancel_tasks()
+            await room._advance(room.history[-1] if room.history else room.chain[0])
+        teams = [p.team for p in seen]
+        assert all(teams[i] != teams[i + 1] for i in range(len(teams) - 1))   # alternate
+        team1 = [p for p in seen if p.team == 1]
+        assert len({p.id for p in team1}) == 3                                 # all 3 rotate in
+        assert teams.count(0) == teams.count(1)                                # equal turns
+        room._cancel_tasks()
+    run(go())
+
+
+def test_team_lives_are_shared_and_last_team_wins():
+    async def go():
+        room, ps = make_team_room([2, 2])
+        room.update_settings({"lives": 2})
+        await room.start()
+        losing_team = room.current.team
+        while room.phase == "playing":
+            cur = room.current
+            if cur.team == losing_team:
+                await room.submit(cur.id, "piano")                 # miss
+            else:
+                room._cancel_tasks(); await room._advance(room.chain[-1])
+        assert room.winner_team == 1 - losing_team
+        assert room.team_lives[losing_team] == 0
+        assert sum(p.misses for p in room.members(losing_team)) == 2   # 2 shared lives
+        assert room.team_standings()[0] == 1 - losing_team
+    run(go())
+
+
+def test_host_end_in_team_mode_picks_team_with_most_points():
+    async def go():
+        room, ps = make_team_room([1, 2, 1])
+        await room.start()
+        room._cancel_tasks()
+        ps[0].score = 30; ps[1].score = 20; ps[2].score = 15; ps[3].score = 40
+        await room.end_game()
+        assert room.winner_team == 2 and room.team_standings() == [2, 1, 0]
+    run(go())
+
+
+def test_empty_teams_are_skipped_but_need_two_teams():
+    async def go():
+        room, ps = make_team_room([2, 0, 1])
+        await room.start()
+        assert set(room.team_lives) == {0, 2}
+        room._cancel_tasks()
+        solo, _ = make_team_room([2, 0])
+        with pytest.raises(GameError):
+            await solo.start()
+    run(go())
+
+
+def test_set_team_validation():
+    room, ps = make_team_room([1, 1])
+    with pytest.raises(GameError):
+        room.set_team(ps[0].id, 5)
+    room.update_settings({"mode": "solo"})
+    with pytest.raises(GameError):
+        room.set_team(ps[0].id, 1)

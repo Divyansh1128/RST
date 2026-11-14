@@ -8,6 +8,12 @@ Every accepted word shortens the clock by 4%, so even perfect players eventually
 * **Banned letters are the host's choice**: classic R S T, or any three letters (presets: Easy
   X Y Z, Vowels A E I, Brutal C P S, Random). The lobby shows how many common words a set
   blocks, from ~0.4% (X Y Z) to ~30% (C P S); R S T blocks ~23%.
+* **Teams**: switch the room to Teams and pick 2-4 teams (Ink, Ember, Moss, Tide), any split up
+  to 7 players. Drag player cards between team columns (the host can move anyone, players move
+  themselves; on touch screens drag by the grip, or tap it to cycle teams). Each team shares a
+  pool of lives; turns go round-robin over the teams still alive and each team rotates through its
+  members, so a 1-player team gets as many turns as a 4-player team. Last team standing wins, or
+  the team with most points if the host ends early.
 * **Scoring**: 10 points per accepted word + up to 5 for answering fast. The host can end the
   game at any time; the leader on points wins (ties: lives left, then fewer misses). If the
   game is played out, the last player standing wins.

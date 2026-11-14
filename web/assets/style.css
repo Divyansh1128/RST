@@ -1,5 +1,6 @@
 /* RST — tabletop / editorial look: paper, ink, one vermilion stamp colour. */
 :root {
+  --team0: var(--ink); --team1: var(--accent); --team2: #4E8A3E; --team3: #3B6EA5;
   --paper: #F3EEE4;
   --paper-2: #EAE3D5;
   --card: #FBF8F2;
@@ -159,8 +160,9 @@ input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb,
 .seat-list { list-style: none; padding: 0; margin: 0 0 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .seat {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--card);
-  border: 1px solid var(--line); min-height: 64px; animation: pop .35s cubic-bezier(.2,.8,.2,1.3) both;
+  border: 1px solid var(--line); min-height: 64px;
 }
+.seat.new { animation: pop .35s cubic-bezier(.2,.8,.2,1.3) both; }
 .seat.empty { background: transparent; border-style: dashed; color: var(--muted); font-style: italic; font-family: var(--display); box-shadow: none; animation: none; }
 .seat .who { flex: 1; min-width: 0; }
 .seat .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -173,6 +175,34 @@ input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb,
 }
 .avatar.bot { border-radius: 50%; }
 @keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+
+/* team lobby */
+.team-board { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 12px; margin-bottom: 10px; }
+.team-col { border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--team) 6%, var(--paper)); padding: 12px; min-height: 180px; transition: border-color .15s, background .15s, box-shadow .15s; }
+.team-col header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: var(--display); font-size: 1.1rem; }
+.team-col header .muted { margin-left: auto; font: 500 .8rem var(--mono); }
+.team-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.team-col .seat { min-height: 56px; padding: 8px 10px; gap: 8px; border-left: 4px solid var(--team); }
+.team-col .seat[data-drag] { cursor: grab; }
+.team-col.drop-over { border-color: var(--team); border-style: dashed; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--team) 35%, transparent); background: color-mix(in srgb, var(--team) 14%, var(--paper)); }
+.drop-hint { border: 1.5px dashed var(--line); border-radius: 10px; padding: 10px; text-align: center; color: var(--muted); font: italic .9rem var(--display); display: none; }
+.is-dragging .drop-hint, .team-col ul:not(:has(.seat)) .drop-hint { display: block; }
+.swatch { width: 12px; height: 12px; border-radius: 4px; background: var(--team); flex: none; display: inline-block; }
+.swatch.big { width: 16px; height: 38px; border-radius: 6px; }
+.grip { border: 0; background: transparent; color: var(--muted); cursor: grab; font-size: 1.1rem; padding: 6px 2px; touch-action: none; line-height: 1; }
+.grip:hover { color: var(--ink); }
+.seat.dragging { opacity: .35; }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; animation: none !important; box-shadow: 0 18px 40px -12px rgba(0,0,0,.45); background: var(--card); }
+.is-dragging, .is-dragging * { cursor: grabbing !important; user-select: none; }
+.team-hint { margin: 0 0 22px; }
+/* team game view */
+.team-head { display: flex; align-items: center; gap: 8px; padding: 10px 4px 2px; font-family: var(--display); font-size: 1.05rem; list-style: none; }
+.team-head .lives { margin-left: 6px; }
+.team-head .score { margin-left: auto; font-size: 1.3rem; font-weight: 600; padding-right: 12px; }
+.team-head.out { opacity: .45; text-decoration: line-through; }
+.pl.in-team { border-left: 4px solid var(--team); }
+.pl.in-team .meta .lives { display: none; }
+.team-row { border-left: 5px solid var(--team) !important; }
 
 .bot-panel { padding: 20px; display: grid; gap: 14px; }
 .bot-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -267,7 +297,8 @@ input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb,
 .feed { padding: 16px 18px; max-height: 420px; overflow: auto; }
 .feed h3 { margin-bottom: 8px; }
 .feed ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.feed li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: .9rem; animation: pop .3s both; }
+.feed li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: .9rem; }
+.feed li.new { animation: pop .3s both; }
 .feed li:last-child { border-bottom: 0; }
 .feed .w { font-family: var(--display); font-size: 1.1rem; }
 .feed .bad .w { text-decoration: line-through; text-decoration-color: var(--accent); color: var(--muted); }
@@ -280,7 +311,7 @@ input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb,
 
 /* ---------- over ---------- */
 .over { max-width: 760px; margin: 0 auto; text-align: center; padding: 40px 0; display: grid; gap: 22px; }
-.over h1 { font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 500; }
+.over h1 { font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 500; text-wrap: balance; }
 .over h1 em { color: var(--accent); }
 .final-chain { font-family: var(--display); font-size: 1.15rem; color: var(--ink-2); line-height: 1.9; }
 .final-chain span { white-space: nowrap; }
@@ -325,6 +356,9 @@ input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb,
   .rules .rule:first-child { border-top: 0; }
   .skill-picker { grid-template-columns: repeat(3, 1fr); }
   .seat-list { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .team-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .team-col .seat .tag { display: none; }
+  .team-col .seat .avatar { width: 30px; height: 30px; font-size: .9rem; }
   .seat { padding: 10px; gap: 10px; min-height: 56px; }
   .seat.empty { min-height: 44px; }
   .code-actions { justify-items: start; }

@@ -99,6 +99,8 @@
             <h2>Players <span id="seatCount" class="muted"></span></h2>
           </div>
           <ul id="seatList" class="seat-list"></ul>
+          <div id="teamBoard" class="team-board" hidden></div>
+          <p id="teamHint" class="hint team-hint" hidden></p>
 
           <div id="botPanel" class="card bot-panel">
             <div class="bot-panel-head">
@@ -117,13 +119,25 @@
           <div class="card settings" id="settingsCard">
             <h3>Table rules</h3>
             <div class="setting">
+              <span>Mode</span>
+              <div class="seg" data-key="mode">
+                <button data-v="solo">Every player</button><button data-v="teams">Teams</button>
+              </div>
+            </div>
+            <div class="setting" id="teamsSetting" hidden>
+              <span>Number of teams</span>
+              <div class="seg" data-key="teams">
+                <button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button>
+              </div>
+            </div>
+            <div class="setting">
               <span>Turn timer</span>
               <div class="seg" data-key="turnSeconds">
                 <button data-v="8">8s</button><button data-v="15">15s</button><button data-v="25">25s</button>
               </div>
             </div>
             <div class="setting">
-              <span>Lives</span>
+              <span id="livesLabel">Lives</span>
               <div class="seg" data-key="lives">
                 <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button>
               </div>
