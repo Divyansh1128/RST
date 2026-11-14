@@ -5,13 +5,15 @@ Run:  .venv/bin/uvicorn server.app:app --reload
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import time
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .game import DIFFICULTIES, GameError, Room, new_code
@@ -240,4 +242,21 @@ app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")
 
 @app.get("/{path:path}")
 def spa(path: str):
-    return FileResponse(WEB / "index.html")
+    # Browsers must revalidate the page, and asset URLs carry a content hash, so a
+    # deploy shows up on the next load instead of whenever a cache decides to expire.
+    return HTMLResponse(_index_html(), headers={"Cache-Control": "no-cache"})
+
+
+def _asset_version() -> str:
+    h = hashlib.sha1()
+    for f in sorted((WEB / "assets").glob("*")):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:10]
+
+
+@lru_cache(maxsize=1)
+def _index_html() -> str:
+    v = _asset_version()
+    html = (WEB / "index.html").read_text()
+    return (html.replace('/assets/style.css"', f'/assets/style.css?v={v}"')
+                .replace('/assets/app.js"', f'/assets/app.js?v={v}"'))
